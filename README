@@ -1,0 +1,116 @@
+Forlication
+===========
+
+Forlication is a rails-engine oriented around callback execution for url visits.
+
+Usage
+=====
+
+1. Place the Forlication engine in vendor/plugins
+2. Read the following:
+
+  If in your routes file you have something like:
+
+  map.forlicate_at :scope_name, :path_prefix => "prefix",
+                   :action_class => "UrlShortener"
+
+  This will generate a route like:
+  scope_name   /prefix/:token  {:controller => 'forlication', :action => 'show'}
+
+  When /prefix/:token is visited. Using the default controller, 'forlication', the following happens:
+
+  **Note you can use 'new' instead of 'forlicate' below. Just be careful with changing the initialize of rails models
+
+  w = UrlShortener.forlicate({:token => "TOKEN",
+                              :user_agent => "The useragent; MSIE 7.0",
+                              :referrer => "http://www.thereferrer.com/",
+                              :ip_address => "127.0.0.1"})
+
+  redirect_to w.redirect_to if w.responds_to?(:redirect_to) and w.redirect_to
+  render w.render if w.responds_to?(:render) and w.render
+
+  If w responds to both redirect_to and render, redirect_to has priority.
+
+  ------------------------------------------------------------------------
+
+  If you had something like:
+
+    map.forlicate_at :url, :path_prefix => 'tracker',
+                     :controller => 'forlication',
+                     :token => 'tracking_code',
+                     :action_class => "Tracking"
+                     :action => :track
+
+
+  A route like:
+  tracker   /tracker/:tracking_code  {:controller => 'forlication', :action => 'track'}
+
+  And it would have similiar execution properties as the above example. Note that the key in the map
+  passed to Tracking.new that corresponds to :tracking_code will still be :token
+
+  --------------------------------------------------------------------------
+
+  If you would like to do some more advanced callbacks (like serializing object instances,
+  and calling methods in them when a url is visited) this can also be done.
+
+  Make sure you first use:
+
+  script/generate forlication_job_migration
+  rake db:migrate
+
+  Then in your routes file have something like:
+
+  map.forlicate_at :image_track, :path_prefix => 'i',
+                   :performer => true
+
+  Because this is a performer, the 'action_class' attribute would have no effect.
+
+  This route creates some extra methods for you available in your controllers. They are:
+    image_track_forlication_url
+    image_track_forlication_path
+
+  When an object instance is passed to this method (say +object+), it will return the url or path that WHEN VISITED
+  WILL RESULT IN +object+.perform({:token => "the_token",
+                                   :user_agent => "The useragent; MSIE 7.0",
+                                   :referrer => "http://www.thereferrer.com/",
+                                   :ip_address => "127.0.0.1"})
+  BEING EXECUTED. +object+.perform MUST RETURN and object that has a 'redirect_to' or 'render' method as above.
+
+
+Example
+=======
+
+'lib/redirector.rb'
+--------------------
+require 'ostruct'
+
+class Redirector
+  def initialize(redirect)
+    @redirect = redirect
+  end
+
+  def perform(args={})
+    OpenStruct.new({:redirect_to => @redirect})
+  end
+end
+
+'config/routes.rb'
+------------------
+   map.forlicate_at :redirector, :path_prefix => 'r',
+                    :performer => true
+
+
+link = redirector_forlication_url(Redirector.new("http://www.google.ca/"))
+
+Now the path indicated by +link+ will redirect to "http://www.google.ca/"
+
+
+Known Issues
+----------------
+-You need to have 'config.cache_classes = true' in your development environment file when using 'action_class' parameters.
+This is because classes become unloaded, but forlication retains a reference to the unloaded class because of the way
+delegation is done.
+
+-There are no tests, so stuff might not work.
+
+Copyright (c) 2010 Timothy Frison, released under the MIT license
